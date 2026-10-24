@@ -13,6 +13,7 @@ import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.SslErrorHandler
 import android.webkit.JavascriptInterface
@@ -23,12 +24,17 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.PopupMenu
 import android.widget.Toast
+import androidx.webkit.ProfileStore
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import dev.zcode.remote.databinding.ActivityWebBinding
 import org.json.JSONObject
 
 class WebActivity : Activity() {
 
     private lateinit var binding: ActivityWebBinding
+    /** 实际承载页面的 WebView（可能带实例隔离 Profile，顶替了 XML 里的占位）。 */
+    private lateinit var web: WebView
     private var instance: Instance? = null
     private var resumed = false
 
@@ -48,6 +54,8 @@ class WebActivity : Activity() {
             InstanceStore.upsert(this, it)
         }
 
+        web = createIsolatedWebView(instance!!.id)
+
         binding.btnBack.setOnClickListener { finish() }
         binding.btnMore.setOnClickListener { anchor ->
             val popup = PopupMenu(this, anchor)
@@ -62,7 +70,7 @@ class WebActivity : Activity() {
                         )
                         true
                     }
-                    R.id.action_refresh -> { hideError(); binding.web.reload(); true }
+                    R.id.action_refresh -> { hideError(); web.reload(); true }
                     R.id.action_browser -> { openExternally(instance?.url ?: ""); true }
                     R.id.action_copy -> { copyUrl(); true }
                     R.id.action_edit -> {
@@ -87,17 +95,17 @@ class WebActivity : Activity() {
         }
         binding.btnRetry.setOnClickListener {
             hideError()
-            instance?.let { binding.web.loadUrl(it.url) }
+            instance?.let { web.loadUrl(it.url) }
         }
         // 下拉刷新：页面卡死时的就地恢复手段
-        binding.pull.setup(binding.web, binding.refreshSpinner) {
+        binding.pull.setup(web, binding.refreshSpinner) {
             hideError()
-            binding.web.reload()
+            web.reload()
         }
 
         configureWebView()
         applyInstanceState()
-        binding.web.loadUrl(instance!!.url)
+        web.loadUrl(instance!!.url)
     }
 
     override fun onResume() {
@@ -118,7 +126,7 @@ class WebActivity : Activity() {
         applyInstanceState()
         LastPage.markPage(this, fresh.id)
         if (old != null && old.url != fresh.url && binding.error.visibility != View.VISIBLE) {
-            binding.web.loadUrl(fresh.url)
+            web.loadUrl(fresh.url)
         }
     }
 
@@ -133,12 +141,11 @@ class WebActivity : Activity() {
         LastPage.markPage(this, fresh.id)
         if (switched) {
             hideError()
-            binding.web.loadUrl(fresh.url)
+            web.loadUrl(fresh.url)
         }
     }
 
     override fun onBackPressed() {
-        val web = binding.web
         when {
             binding.error.visibility == View.VISIBLE -> finish()
             web.canGoBack() -> web.goBack()
@@ -157,9 +164,25 @@ class WebActivity : Activity() {
         }
     }
 
+    /**
+     * 创建绑定到该实例隔离 Profile 的 WebView，顶替 XML 里的占位（同位置、同布局参数）。
+     * 每实例一个 Profile：cookie/登录态按电脑隔离，不同电脑可各登各的智谱账号。
+     * 老内核不支持 MULTI_PROFILE 时留在默认 Profile（全局共享，只能同时登一个账号）。
+     */
+    private fun createIsolatedWebView(instanceId: String): WebView {
+        val created = WebView(this)
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
+            ProfileStore.getInstance().getOrCreateProfile(webViewProfileName(instanceId))
+            WebViewCompat.setProfile(created, webViewProfileName(instanceId))
+        }
+        val parent = binding.web.parent as ViewGroup
+        parent.addView(created, parent.indexOfChild(binding.web), binding.web.layoutParams)
+        parent.removeView(binding.web)
+        return created
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     private fun configureWebView() {
-        val web = binding.web
         web.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -300,7 +323,7 @@ class WebActivity : Activity() {
     }
 
     override fun onDestroy() {
-        binding.web.apply {
+        web.apply {
             loadUrl("about:blank")
             onPause()
             destroy()

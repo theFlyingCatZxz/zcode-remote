@@ -2,6 +2,8 @@ package dev.zcode.remote
 
 import android.content.Context
 import android.net.Uri
+import androidx.webkit.ProfileStore
+import androidx.webkit.WebViewFeature
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -72,6 +74,10 @@ object InstanceStore {
 
     fun remove(context: Context, id: String) {
         save(context, load(context).filterNot { it.id == id })
+        // 实例的隔离 Profile（cookie/登录态）一并清掉；不支持多 Profile 的老内核无此物
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
+            ProfileStore.getInstance().deleteProfile(webViewProfileName(id))
+        }
     }
 
     /** 页面侧检测到任务结束（用户不在场）→ 点亮该实例红点。 */
@@ -98,9 +104,11 @@ object InstanceStore {
         load(context).count { it.unreadDone }
 }
 
+/** 实例隔离 Profile 名（WebView MULTI_PROFILE）：仅字母数字，规避内核对名字字符集的校验。 */
+fun webViewProfileName(instanceId: String) = "inst" + instanceId.replace("-", "")
+
 object Urls {
     private val trailingJunk = Regex("[\\s\"'<>),.;。」』）】]+")
-
     /** 清洗粘贴内容：去空白/控制字符/首尾杂字符，仅接受 https，返回规范化的完整 URL 或 null。 */
     fun sanitize(raw: String): String? {
         val s = raw.replace(Regex("[\\s\\u0000-\\u001F\\u007F]+"), "")

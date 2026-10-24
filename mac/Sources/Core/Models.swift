@@ -1,4 +1,5 @@
 import Foundation
+import WebKit
 
 /// 电脑实例模型（与 Android/iOS 版数据结构对齐，JSON 互通）。
 /// mac 端差异：恒以桌面形态加载（`desktopMode` 字段仅为兼容既有 JSON 保留，见 CONTRACT.md ⑤）；
@@ -93,11 +94,13 @@ final class InstanceStore: ObservableObject {
         }
     }
 
-    var unreadDoneCount: Int { instances.count { $0.unreadDone == true } }
+    var unreadDoneCount: Int { instances.filter { $0.unreadDone == true }.count }
 
     func remove(_ id: UUID) {
         instances.removeAll { $0.id == id }
         persist()
+        // 实例的隔离存储区（cookie/登录态）一并清掉；API 是 async 的，异发不阻塞调用方
+        Task { try? await WKWebsiteDataStore.remove(forIdentifier: id) }
     }
 }
 

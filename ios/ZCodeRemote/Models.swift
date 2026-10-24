@@ -1,4 +1,5 @@
 import Foundation
+import WebKit
 
 /// 电脑实例模型（与 Android 版数据结构对齐）。
 struct Instance: Codable, Identifiable, Equatable, Hashable {
@@ -92,6 +93,8 @@ final class InstanceStore: ObservableObject {
     func remove(_ id: UUID) {
         instances.removeAll { $0.id == id }
         persist()
+        // 实例的隔离存储区（cookie/登录态）一并清掉；API 是 async 的，异发不阻塞调用方
+        Task { try? await WKWebsiteDataStore.remove(forIdentifier: id) }
     }
 }
 

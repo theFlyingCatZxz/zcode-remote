@@ -193,6 +193,7 @@ WKWebView 在 macOS 上原生可用，`window.webkit.messageHandlers` 桥两侧�
 | `UIPasteboard.general.string = s` | `NSPasteboard.general.clearContents(); NSPasteboard.general.setString(s, forType: .string)` | NSPasteboard 是增量模型，不 clearContents 会追加历史 |
 | `UIApplication.shared.open(url)` | `NSWorkspace.shared.open(url)` | 外部 scheme（mailto/tel 等）与「在 Safari 打开」同此 |
 | `UIViewRepresentable`（makeUIView/updateUIView/dismantleUIView） | `NSViewRepresentable`（makeNSView/updateNSView/dismantleNSView） | Coordinator 模式照搬 |
+| `config.websiteDataStore = WKWebsiteDataStore(forIdentifier: instance.id)` | 同 | 每实例独立存储区：不同电脑各登各的智谱账号互不顶会话。两平台同款；删除实例时 `InstanceStore.remove` 内异发 `try? await WKWebsiteDataStore.remove(forIdentifier:)` 清理。Android 对应物是 `WebViewCompat.setProfile`（`webViewProfileName(id)`，MULTI_PROFILE 不支持时退默认共享） |
 | `UIRefreshControl` + `zcodePullGate` 防误触 | **整段删除** | mac 无下拉刷新对应物；保留菜单「刷新」（reloadToken 通道）。注入脚本里的探测段留着无妨（无 handler 即 no-op），但 native 侧 pullGate/refreshControl 代码全部不要 |
 | `UIApplication.shared.isIdleTimerDisabled`（屏幕常亮） | **不需要** | mac 接电源、系统设置管休眠；onAppear/onDisappear 里的常亮开关整段去掉，`Instance.keepScreenOn` 字段保留、编辑页是否保留开关由 UI 模块定（默认建议隐藏，保存时保留原值） |
 | `Color(uiColor: .systemGroupedBackground)` / `.systemBackground` | `Color(nsColor: .windowBackgroundColor)` / `.controlBackgroundColor` | 语义对应即可，深色模式同样跟随系统 |

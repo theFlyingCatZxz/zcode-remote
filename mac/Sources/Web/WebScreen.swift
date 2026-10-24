@@ -172,6 +172,8 @@ private struct WebView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
+        // 每实例独立存储区：不同电脑可各登各的智谱账号，互不顶会话
+        config.websiteDataStore = WKWebsiteDataStore(forIdentifier: instance.id)
         // 任务结束检测：页面脚本执行前注入，通过 message handler 回传 native。
         // 脚本含下拉刷新探测段，mac 无消费者但保持与 iOS/Android 副本逐字节一致（CONTRACT ①）。
         config.userContentController.addUserScript(

@@ -15,8 +15,8 @@ android {
         applicationId "dev.zcode.remote"
         minSdk 26
         targetSdk 34
-        versionCode 9
-        versionName "1.6.0"
+        versionCode 10
+        versionName "1.9.0"
     }
 
     signingConfigs {
@@ -54,7 +54,10 @@ android {
 
 // 零资源依赖红线：只允许纯 JAR 依赖（不进资源链接管线，见 wayfinder/T8）。
 // zxing core 为纯 Java QR 解码库；UI 全部 android.* 平台控件。
+// 例外：androidx.webkit——AAR 但 res 为空（<resources/>），无符号可链接，不触发 T8 故障。
 dependencies {
+    // MULTI_PROFILE：每实例独立 WebView 存储（cookie/登录态按电脑隔离）
+    implementation 'androidx.webkit:webkit:1.11.0'
     implementation 'com.google.zxing:core:3.5.3'
     testImplementation 'junit:junit:4.13.2'
     // JVM 单测里用真实 org.json 实现（android.jar 里的是 stub）；仅测试期依赖，不进 APK

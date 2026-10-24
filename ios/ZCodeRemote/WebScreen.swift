@@ -188,6 +188,8 @@ private struct WebView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let desktop = instance.desktopMode
         let config = WKWebViewConfiguration()
+        // 每实例独立存储区：不同电脑可各登各的智谱账号，互不顶会话
+        config.websiteDataStore = WKWebsiteDataStore(forIdentifier: instance.id)
         config.defaultWebpagePreferences.preferredContentMode = desktop ? .desktop : .mobile
         // 任务结束检测：页面脚本执行前注入，通过 message handler 回传 native
         config.userContentController.addUserScript(
