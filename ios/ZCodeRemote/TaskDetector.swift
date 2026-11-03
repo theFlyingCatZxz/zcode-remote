@@ -3,7 +3,7 @@ import UserNotifications
 import UIKit
 import SwiftUI
 
-/// 注入远程页（zcode.z.ai/remote）的脚本：任务结束检测 + 下拉刷新防误触探测。
+/// 注入远程页（zcode.z.ai/remote）的脚本：任务结束检测 + 下拉刷新防误触探测 + 输入法回车防误发。
 ///
 /// 任务结束检测原理：relay 传输是多层二进制协议，无法可靠解析；但任务流式执行时页面
 /// WebSocket 的字节流量持续处于高位，结束后回落到只剩心跳（约 10s 一次、几十字节）。
@@ -18,7 +18,12 @@ import SwiftUI
 /// 触点是否落在还能向上滚的内层容器里，经 zcodePullGate handler 告知 native，
 /// 命中则本次手势摘掉 refreshControl，滚动让给页面。
 ///
-/// 注意：Android 端 DetectorJs.kt 是同一份脚本的移植副本，改动需两处同步。
+/// 输入法回车防误发：WebKit 事件序 bug 165004——回车确认输入法组字时 compositionend
+/// 先于 keydown 派发、且该 keydown 的 isComposing=false，页面「回车发送」无法把它与
+/// 真正的发送回车区分，导致中文打字上屏时消息被打一半就发了出去。脚本吞掉组字收尾后
+/// 极短窗口（50ms）内的 Enter keydown。iOS 键盘的中文输入法回车上屏同样命中此序。
+///
+/// 注意：mac TaskDetector.swift 与 Android 端 DetectorJs.kt 是同一份脚本的同步副本，改一处要同步三处。
 enum TaskDetector {
     static let messageHandlerName = "zcodeTaskDone"
     static let pullGateHandlerName = "zcodePullGate"
@@ -156,6 +161,28 @@ enum TaskDetector {
             }
             notifyPullGate(blocked);
           }, { capture: true, passive: true });
+
+          // —— 输入法回车防误发（三端 BODY 同步块，勿单边改动）——
+          // WebKit(WKWebView/Safari) 事件序 bug 165004：回车确认输入法组字时
+          // compositionend 先于 keydown 派发、且该 keydown 的 isComposing=false，
+          // 页面的「回车发送」无法把它与真正的发送回车区分，打字上屏时消息被误发。
+          // 对策：记录最近一次组字活动时刻，其后 IME_GRACE_MS 内的 Enter keydown 一律
+          // 吞掉（preventDefault + stopImmediatePropagation；挂 window 捕获层，本脚本
+          // 注入于 documentStart、先于页面脚本注册，必然最先收到）。真想发送的回车在
+          // 时序上远离组字收尾，不受影响。Chromium(Android WebView) 本就把组字期 Enter
+          // 标为 isComposing=true，本守卫对它是无害兜底。
+          var IME_GRACE_MS = 50;
+          var imeActiveAt = 0;
+          ['compositionstart', 'compositionupdate', 'compositionend'].forEach(function (t) {
+            window.addEventListener(t, function () { imeActiveAt = Date.now(); }, true);
+          });
+          window.addEventListener('keydown', function (e) {
+            if (e.key !== 'Enter' && e.keyCode !== 13) return;
+            if (e.isComposing || e.keyCode === 229 || Date.now() - imeActiveAt < IME_GRACE_MS) {
+              e.preventDefault();
+              e.stopImmediatePropagation();
+            }
+          }, true);
 
           return 'ok';
         })();
