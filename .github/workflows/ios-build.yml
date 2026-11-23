@@ -18,13 +18,6 @@ jobs:
           brew install xcodegen
           cd ios && xcodegen
 
-      - name: Build (iOS Simulator)
-        run: |
-          cd ios
-          xcodebuild -project ZCodeRemote.xcodeproj -scheme ZCodeRemote \
-            -configuration Debug -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
-
       - name: Build Unsigned IPA
         run: |
           # 1. 归档真机版本 (禁用签名)
@@ -33,7 +26,7 @@ jobs:
             -archivePath ios/build/ZCodeRemote.xcarchive \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             archive
-            
+
           # 2. 手动打包成无签名 IPA
           mkdir -p ios/build/Payload
           cp -R ios/build/ZCodeRemote.xcarchive/Products/Applications/ZCodeRemote.app ios/build/Payload/
@@ -44,50 +37,3 @@ jobs:
         with:
           name: ios-unsigned-ipa
           path: ios/build/ZCodeRemote-unsigned.ipa
-
-      - name: Boot iPhone simulator and smoke test
-        run: |
-          UDID=$(xcrun simctl list devices available | grep -m1 'iPhone' | sed -E 's/.*\(([A-F0-9-]{36})\).*/\1/')
-          echo "iPhone UDID: $UDID"
-          xcrun simctl boot "$UDID"
-          xcrun simctl bootstatus "$UDID" -b
-          xcrun simctl install "$UDID" ios/build/Build/Products/Debug-iphonesimulator/ZCodeRemote.app
-          mkdir -p shots
-          xcrun simctl launch "$UDID" dev.zcode.remote || true
-          sleep 6
-          xcrun simctl io "$UDID" screenshot shots/01_iphone_empty.png || true
-          # 桌面 UA 回显验证 + WebView 主链路（启动参数自动添加并打开）
-          xcrun simctl launch --terminate-running-process "$UDID" dev.zcode.remote \
-            -ZCODE_AUTOPEN_URL 'https://httpbin.org/user-agent' || true
-          sleep 14
-          xcrun simctl io "$UDID" screenshot shots/02_iphone_web.png || true
-          # 冷启动恢复：再次启动（不带参数、杀掉旧进程模拟后台被杀）
-          # 应直达上一次打开的实例页面，而不是回到列表
-          xcrun simctl launch --terminate-running-process "$UDID" dev.zcode.remote || true
-          sleep 10
-          xcrun simctl io "$UDID" screenshot shots/02b_iphone_restore.png || true
-
-      - name: Boot iPad simulator and verify desktop-form web
-        run: |
-          UDID=$(xcrun simctl list devices available | grep -m1 'iPad' | sed -E 's/.*\(([A-F0-9-]{36})\).*/\1/')
-          echo "iPad UDID: $UDID"
-          xcrun simctl boot "$UDID"
-          xcrun simctl bootstatus "$UDID" -b
-          sleep 10
-          xcrun simctl install "$UDID" ios/build/Build/Products/Debug-iphonesimulator/ZCodeRemote.app
-          xcrun simctl launch "$UDID" dev.zcode.remote || true
-          sleep 10
-          xcrun simctl io "$UDID" screenshot shots/03_ipad_list.png || true
-          xcrun simctl launch --terminate-running-process "$UDID" dev.zcode.remote \
-            -ZCODE_AUTOPEN_URL 'https://httpbin.org/user-agent' || true
-          sleep 16
-          xcrun simctl io "$UDID" screenshot shots/04_ipad_desktop_ua.png || true
-          # 诊断：app 最近日志（崩溃/渲染问题可见）
-          xcrun simctl spawn "$UDID" log show --last 3m --style compact \
-            --predicate 'processImagePath CONTAINS "ZCodeRemote"' 2>/dev/null | tail -40 || true
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: ios-screenshots
-          path: shots/

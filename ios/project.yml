@@ -22,6 +22,10 @@ targets:
         MARKETING_VERSION: "1.9.0"
         CURRENT_PROJECT_VERSION: "8"
         TARGETED_DEVICE_FAMILY: "1,2"
+        # 图片资源：AppIcon 由 actool 编进 Assets.car 并写入 Info.plist 的图标条目；
+        # 不设这两项时 xcassets 只会编成资源包，桌面仍显示系统占位图标。
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
     info:
       path: ZCodeRemote/Info.plist
       properties:
