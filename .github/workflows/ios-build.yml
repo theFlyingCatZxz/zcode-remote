@@ -25,6 +25,26 @@ jobs:
             -configuration Debug -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
 
+      - name: Build Unsigned IPA
+        run: |
+          # 1. 归档真机版本 (禁用签名)
+          xcodebuild -project ios/ZCodeRemote.xcodeproj -scheme ZCodeRemote \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath ios/build/ZCodeRemote.xcarchive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            archive
+            
+          # 2. 手动打包成无签名 IPA
+          mkdir -p ios/build/Payload
+          cp -R ios/build/ZCodeRemote.xcarchive/Products/Applications/ZCodeRemote.app ios/build/Payload/
+          cd ios/build && zip -r ZCodeRemote-unsigned.ipa Payload
+
+      - name: Upload Unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-unsigned-ipa
+          path: ios/build/ZCodeRemote-unsigned.ipa
+
       - name: Boot iPhone simulator and smoke test
         run: |
           UDID=$(xcrun simctl list devices available | grep -m1 'iPhone' | sed -E 's/.*\(([A-F0-9-]{36})\).*/\1/')
